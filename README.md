@@ -31,12 +31,26 @@ A powerful, terminal-based download manager written in Python, featuring a moder
 ### Running the Application
 You can start the application using the provided batch file (Windows) or directly via Python:
 
+**Linux (Debian/Ubuntu)**:
+1.  Make the scripts executable:
+    ```bash
+    chmod +x install.sh run.sh
+    ```
+2.  Run the installer (creates venv and installs deps):
+    ```bash
+    ./install.sh
+    ```
+3.  Start the app:
+    ```bash
+    ./run.sh
+    ```
+
 **Windows**:
 ```batch
 run.bat
 ```
 
-**Python command**:
+**Manual Python command**:
 ```bash
 python -m ui.tui
 ```
@@ -55,6 +69,20 @@ python -m ui.tui
 
 - **UI Framework**: [Textual](https://textual.textualize.io/)
 - **Engine**: Asyncio-based custom download manager.
+
+## Browser Extension Integration
+
+IDM 2.0 comes with a browser extension to capture downloads automatically.
+
+### Installation (Chrome/Edge/Brave)
+
+1.  Open your browser and navigate to `chrome://extensions`.
+2.  Enable **Developer mode** (toggle in top right).
+3.  Click **Load unpacked**.
+4.  Select the `extension` folder in this repository.
+5.  The IDM 2.0 extension should now be active.
+
+**Note**: Ensure the IDM 2.0 application is running for the extension to capture downloads.
 
 ## License
 
