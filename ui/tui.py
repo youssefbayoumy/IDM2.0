@@ -1,6 +1,6 @@
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical, Horizontal, Grid
-from textual.widgets import Header, Footer, DataTable, Input, Static, Button, Label, Digits
+from textual.widgets import Header, Footer, DataTable, Input, Static, Button, Label, Digits, Log
 from textual.screen import ModalScreen
 from textual.binding import Binding
 from textual.reactive import reactive
@@ -65,12 +65,12 @@ class DetailedDownloadScreen(ModalScreen):
     CSS = """
     DetailedDownloadScreen {
         align: center middle;
-        background: rgba(0,0,0,0.8);
+        background: rgba(0,0,0,0.85);
     }
     #detail_dialog {
-        width: 80%;
-        height: 80%;
-        border: thick $secondary;
+        width: 85%;
+        height: 85%;
+        border: heavy $secondary;
         background: $surface;
         layout: vertical;
         padding: 1 2;
@@ -110,7 +110,7 @@ class DetailedDownloadScreen(ModalScreen):
 
     def compose(self) -> ComposeResult:
         with Container(id="detail_dialog"):
-            yield Label(f"[bold]Downloading:[/] {self.item.filename}", id="title")
+            yield Label(f"[bold cyan]Downloading:[/] [white]{self.item.filename}[/]", id="title")
             yield Label(f"[dim]{self.item.url}[/]")
             yield Label("", id="stats")
             # Using VerticalScroll instead of Grid for stability
@@ -196,9 +196,10 @@ class DetailedDownloadScreen(ModalScreen):
         # Clamp filled
         filled = max(0, min(width, filled))
         
-        # Use ASCII for safety
-        bar = "#" * filled + "-" * (width - filled)
-        return f"[{'green' if pct >= 100 else 'cyan'}]{bar}[/] {pct:.1f}%"
+        # Use Block characters for smoother look
+        # Full block: █, Light shade: ░ (or space/dim line)
+        bar = "█" * filled + "░" * (width - filled)
+        return f"[{'bright_green' if pct >= 100 else 'bright_cyan'}]{bar}[/] {pct:.1f}%"
 
     def format_size(self, size_bytes: int) -> str:
         if size_bytes == 0: return "0 B"
@@ -216,13 +217,13 @@ class Dashboard(Static):
         layout: grid;
         grid-size: 3;
         grid-gutter: 1;
-        height: 7;
+        height: 6;
         margin: 0 0 1 0;
         padding: 0 1;
     }
     .metric-card {
-        background: $boost;
-        border: tab $primary;
+        background: $surface;
+        border: tall $primary;
         padding: 0 1;
         height: 100%;
         content-align: center middle;
@@ -234,29 +235,27 @@ class Dashboard(Static):
     .metric-value {
         text-style: bold;
         color: $secondary;
+        width: 100%;
+        content-align: center middle;
     }
     """
 
     active_downloads = reactive(0)
     total_speed = reactive(0.0)
-    completed_count = reactive(0)
+    session_data = reactive(0.0) # MB downloaded this session
 
     def compose(self) -> ComposeResult:
-        yield Container(
-            Label("Active Downloads", classes="metric-title"),
-            Digits("0", id="active_val", classes="metric-value"),
-            classes="metric-card"
-        )
-        yield Container(
-            Label("Total Speed", classes="metric-title"),
-            Static("0.0 MB/s", id="speed_val", classes="metric-value"),
-            classes="metric-card"
-        )
-        yield Container(
-            Label("Completed", classes="metric-title"),
-            Digits("0", id="completed_val", classes="metric-value"),
-            classes="metric-card"
-        )
+        with Container(classes="metric-card"):
+            yield Label("ACTIVE TASKS", classes="metric-title")
+            yield Digits("0", id="active_val", classes="metric-value")
+        
+        with Container(classes="metric-card"):
+            yield Label("NETWORK SPEED", classes="metric-title")
+            yield Static("0.0 MB/s", id="speed_val", classes="metric-value")
+            
+        with Container(classes="metric-card"):
+            yield Label("SESSION DATA", classes="metric-title")
+            yield Static("0.0 MB", id="data_val", classes="metric-value")
 
     def watch_active_downloads(self, value: int) -> None:
         try:
@@ -269,9 +268,9 @@ class Dashboard(Static):
             self.query_one("#speed_val", Static).update(f"{val_mb:.1f} MB/s")
         except: pass
 
-    def watch_completed_count(self, value: int) -> None:
+    def watch_session_data(self, value: float) -> None:
         try:
-            self.query_one("#completed_val", Digits).update(str(value))
+            self.query_one("#data_val", Static).update(f"{value:.1f} MB")
         except: pass
 
 class DownloadApp(App):
@@ -279,28 +278,55 @@ class DownloadApp(App):
     Screen {
         layout: vertical;
         padding: 0;
+        background: #0b0f19; /* Dark background */
     }
+    
+    /* Global Theme Overrides */
+    
     DataTable {
         height: 1fr;
         border: solid $accent;
+        background: #0b0f19;
     }
+    
+    /* Input Area */
+    #input_container {
+        dock: bottom;
+        height: auto;
+        margin: 0 0 1 0;
+        layout: horizontal;
+    }
+    
     Input {
-        dock: bottom;
-        margin: 1 0;
+        width: 1fr;
         border: tall $primary;
+        height: 3;
     }
-    .details-box {
+    
+    #add_btn {
+        width: 10;
+        height: 3;
+        margin-left: 1;
+        border: none;
+        background: $primary;
+        color: black;
+        text-style: bold;
+    }
+
+    #app_log {
         dock: bottom;
-        height: 6;
+        height: 8;
         border: heavy $secondary;
-        padding: 0 1;
-        background: $surface-darken-1;
+        background: #111;
+        color: #0f0;
+        margin-top: 1;
     }
+
     Header {
         dock: top;
         height: 1;
         background: $primary;
-        color: white;
+        color: black;
         text-style: bold;
     }
     """
@@ -321,8 +347,10 @@ class DownloadApp(App):
         yield Header(show_clock=True)
         yield Dashboard()
         yield DataTable(cursor_type="cell", zebra_stripes=True)
-        yield Static(id="details", classes="details-box")
-        yield Input(placeholder="Paste URL to download and press Enter (Ctrl+V to paste)", id="url_input")
+        yield Log(id="app_log")
+        with Container(id="input_container"):
+            yield Input(placeholder="Paste URL (Enter to download)", id="url_input")
+            yield Button("ADD", id="add_btn", variant="primary")
         yield Footer()
 
     async def on_mount(self) -> None:
@@ -387,39 +415,26 @@ class DownloadApp(App):
         if retry:
             self.call_after_refresh(self.action_resume)
 
-    def on_data_table_row_highlighted(self, message: DataTable.RowHighlighted) -> None:
-        self.update_details(message.row_key.value)
-
-    def update_details(self, row_id: str) -> None:
-        if row_id in self.manager.downloads:
-            item = self.manager.downloads[row_id]
-            import os
-            path = os.path.join(item.save_path, item.filename) if item.filename else "Unknown"
-            
-            # Rich styling for details
-            status_color = "green" if item.status == DownloadStatus.COMPLETED else "yellow"
-            if item.status == DownloadStatus.ERROR: status_color = "red"
-            
-            details = (
-                f"[bold]URL:[/] {item.url}\n"
-                f"[bold]File:[/] {path}\n"
-                f"[bold]Status:[/] [{status_color}]{item.status.value}[/]\n"
-            )
-            
-            if item.status == DownloadStatus.ERROR:
-                details += f"[bold red]Error Details:[/] {item.error_message}"
-            
-            self.query_one("#details", Static).update(details)
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "add_btn":
+            url_input = self.query_one("#url_input", Input)
+            await self.submit_url(url_input.value)
 
     async def on_input_submitted(self, message: Input.Submitted) -> None:
-        url = message.value
+        await self.submit_url(message.value)
+
+    async def submit_url(self, url: str) -> None:
         if url:
              # Basic URL validation could go here
-            self.manager.add_download(url)
-            # Auto-start for now
-            dl_id = list(self.manager.downloads.keys())[-1]
-            await self.manager.start_download(dl_id)
-            self.query_one(Input).value = ""
+            if self.manager.add_download(url):
+                self.query_one("#app_log", Log).write_line(f"[green]Started download: {url}[/]")
+                # Auto-start for now
+                dl_id = list(self.manager.downloads.keys())[-1]
+                await self.manager.start_download(dl_id)
+            else:
+                self.query_one("#app_log", Log).write_line(f"[red]Failed to add URL: {url}[/]")
+            
+            self.query_one("#url_input", Input).value = ""
 
     def format_size(self, size_bytes: int) -> str:
         if size_bytes == 0: return "0 B"
@@ -437,11 +452,14 @@ class DownloadApp(App):
         # Calculate Dashboard stats
         active = sum(1 for d in downloads if d.status in [DownloadStatus.DOWNLOADING, DownloadStatus.QUEUED])
         total_speed = sum(d.speed for d in downloads if d.status == DownloadStatus.DOWNLOADING)
-        completed = sum(1 for d in downloads if d.status == DownloadStatus.COMPLETED)
+        
+        # Calculate session downloaded (approx) - strictly this should be accumulated, but for now sum of downloaded_size of active/completed works if we assume one session
+        # or we just sum all downloaded_size
+        session_down_mb = sum(d.downloaded_size for d in downloads) / 1024 / 1024
         
         dashboard.active_downloads = active
         dashboard.total_speed = total_speed
-        dashboard.completed_count = completed
+        dashboard.session_data = session_down_mb
 
         # Update Table
         for item in downloads:
@@ -482,16 +500,15 @@ class DownloadApp(App):
             # Let's simple Text implementation for now, but with color.
             pct = item.progress
             if pct >= 100:
-                bar_color = "green"
-                bar_char = "━"
+                bar_color = "bright_green"
             else:
-                bar_color = "blue"
-                bar_char = "━"
+                bar_color = "bright_cyan"
             
-            # Create a manual text bar
+            # Create a manual text bar with Block Chars
             width = 15
             filled = int(width * (pct / 100))
-            bar_str = bar_char * filled + " " * (width - filled)
+            # █ for full, ░ for empty
+            bar_str = "█" * filled + "░" * (width - filled)
             progress_render = Text(f"{bar_str} {pct:.1f}%", style=bar_color)
 
 
