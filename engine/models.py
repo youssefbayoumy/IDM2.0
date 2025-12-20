@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import Optional, Dict
 
 class DownloadStatus(Enum):
     QUEUED = "Queued"
@@ -9,6 +9,7 @@ class DownloadStatus(Enum):
     COMPLETED = "Completed"
     ERROR = "Error"
     STOPPED = "Stopped"
+    RETRYING = "Retrying"
 
 @dataclass
 class DownloadItem:
@@ -22,3 +23,7 @@ class DownloadItem:
     speed: float = 0.0  # bytes per second
     progress: float = 0.0 # 0.0 to 100.0
     error_message: Optional[str] = None
+    retry_count: int = 0
+    max_retries: int = 3
+    headers: Dict[str, str] = field(default_factory=dict)
+    chunk_progress: Dict[int, float] = field(default_factory=dict) # chunk_id -> progress %
