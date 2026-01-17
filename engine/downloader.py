@@ -395,50 +395,49 @@ class Downloader:
 
     async def download_chunk(self, chunk_id, start_byte, end_byte):
         part_file = f"{self.full_path}.part{chunk_id}"
-        current_size = 0
-        
-        # Resume logic
-        if os.path.exists(part_file):
-            current_size = os.path.getsize(part_file)
-            if end_byte != -1 and current_size >= (end_byte - start_byte + 1):
-                 return
-            
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "*/*",
-            "Accept-Encoding": "gzip, deflate",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-origin",
-            "Connection": "keep-alive"
-        }
-        
-        # Construct Range header
-        if end_byte == -1:
-            # If end_byte is -1, we want from start+current to end
-            headers['Range'] = f'bytes={start_byte + current_size}-'
-        else:
-            headers['Range'] = f'bytes={start_byte + current_size}-{end_byte}'
-            
-            headers['Range'] = f'bytes={start_byte + current_size}-{end_byte}'
-            
-        if self.item.headers:
-             cleaned = {k: v for k, v in self.item.headers.items() if v}
-             
-             # If using external UA, drop hardcoded hints to avoid mismatch
-             if "User-Agent" in cleaned:
-                 headers = {k: v for k, v in headers.items() if not k.lower().startswith("sec-ch-ua")}
-                 
-             headers.update(cleaned)
-
-        if "Referer" not in headers:
-            from urllib.parse import urlparse
-            p = urlparse(self.item.url)
-            headers["Referer"] = f"{p.scheme}://{p.netloc}/"
         
         for attempt in range(self.MAX_RETRIES):
+            current_size = 0
+            
+            # Resume logic
+            if os.path.exists(part_file):
+                current_size = os.path.getsize(part_file)
+                if end_byte != -1 and current_size >= (end_byte - start_byte + 1):
+                     return
+            
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "*/*",
+                "Accept-Encoding": "gzip, deflate",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                "Sec-Fetch-Dest": "empty",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Site": "same-origin",
+                "Connection": "keep-alive"
+            }
+            
+            # Construct Range header
+            if end_byte == -1:
+                # If end_byte is -1, we want from start+current to end
+                headers['Range'] = f'bytes={start_byte + current_size}-'
+            else:
+                headers['Range'] = f'bytes={start_byte + current_size}-{end_byte}'
+
+            if self.item.headers:
+                 cleaned = {k: v for k, v in self.item.headers.items() if v}
+                 
+                 # If using external UA, drop hardcoded hints to avoid mismatch
+                 if "User-Agent" in cleaned:
+                     headers = {k: v for k, v in headers.items() if not k.lower().startswith("sec-ch-ua")}
+
+                 headers.update(cleaned)
+
+            if "Referer" not in headers:
+                from urllib.parse import urlparse
+                p = urlparse(self.item.url)
+                headers["Referer"] = f"{p.scheme}://{p.netloc}/"
+
             try:
                 async with self.session.get(self.item.url, headers=headers, timeout=60) as response:
                     if response.status in [500, 502, 503, 504]:
